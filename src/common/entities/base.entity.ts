@@ -1,12 +1,12 @@
-import { Column, PrimaryGeneratedColumn } from "typeorm"
+import { PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from "typeorm"
 
 export class BaseEntity {
   @PrimaryGeneratedColumn('increment')
   id: number
   
-  @Column()
+  @CreateDateColumn()
   createdAt: Date
 
-  @Column()
+  @UpdateDateColumn()
   updatedAt: Date
 }
