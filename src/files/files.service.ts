@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ErrorCode } from 'src/common/errors';
 import { Folder } from 'src/folders/folder.entity';
 import { Repository } from 'typeorm';
 import { CreateFileDto } from './dto/file.dto';
@@ -16,40 +17,43 @@ export class FilesService {
     return this.filesRepository.find();
   }
 
-  async getFile(id: number): Promise<File[]> {
-    return this.filesRepository.find({
-      where: [{ id }]
-    });
+  async getFile(id: number): Promise<File> {
+    return this.filesRepository.findOne(id)
   }
 
   async createFile(file: CreateFileDto) {
     const { name, folderId } = file
-    const isExists = await this.filesRepository.find({
-      where: [
-        {
-          folderId,
-          name
-        }
-      ]
-    })
+    const [isExists, folder] = await Promise.all([
+      this.filesRepository.findOne({
+        ...(folderId ? {
+          folder: {
+            id: folderId
+          },
+        } : {}
+        ),
+        name
+      }),
+      folderId
+        ? this.foldersRepository.findOne(folderId)
+        : null
+    ])
     if (isExists) {
-      throw new HttpException("this file name already exists", HttpStatus.BAD_REQUEST)
+      throw new HttpException("this file already exists", ErrorCode.FILE_ALREADY_EXISTS)
     }
 
-    const body: Partial<File> = {
+    const newFile = this.filesRepository.create({
       ...file,
-      size: name.length,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }
-    return this.filesRepository.save(body).catch(error => {
+      size: name.length
+    })
+    if (folderId) newFile.folder = folder
+    return this.filesRepository.save(newFile).catch(error => {
       console.log(error)
       throw new HttpException(error.message, HttpStatus.FORBIDDEN)
     })
   }
 
-  async updateFile(file: File) {
-    return this.filesRepository.save(file)
+  async updateFile(file: Partial<File>) {
+    return this.filesRepository.update(file.id, file)
   }
 
   async deleteFile(fileId: number) {

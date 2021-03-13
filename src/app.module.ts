@@ -7,7 +7,9 @@ import { FoldersModule } from './folders/folders.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot(),
+    TypeOrmModule.forRoot({
+      autoLoadEntities: true,
+    }),
     FilesModule,
     FoldersModule,
   ],

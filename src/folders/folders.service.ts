@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ErrorCode } from 'src/common/errors';
 import { Repository } from 'typeorm';
 import { CreateFolderDto } from './dto/folder.dto';
 import { Folder } from './folder.entity';
@@ -24,7 +25,12 @@ export class FoldersService {
       this.foldersRepository.findOne({
         where: {
           name,
-          folderId
+          ...(folderId ? {
+            folder: {
+              id: folderId
+            },
+          } : {}
+          ),
         }
       }),
       folderId
@@ -34,18 +40,19 @@ export class FoldersService {
       : null
     ])
     if (isExists) {
-      throw new HttpException("this folder name already exists", HttpStatus.BAD_REQUEST)
+      throw new HttpException("this folder name already exists", ErrorCode.FOLDER_ALREADY_EXISTS)
     }
     const body: Partial<Folder> = {
-      name,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      name
     }
     const newFolder = this.foldersRepository.create(body)
     if (folderId) {
       newFolder.folder = parentFolder
     }
-    return this.foldersRepository.save(newFolder)
+    return this.foldersRepository.save(newFolder).catch(error => {
+      console.log(error)
+      throw new HttpException(error.message, HttpStatus.FORBIDDEN)
+    })
   }
 
   async updateFolder(folder: Folder) {

@@ -1,0 +1,4 @@
+export enum ErrorCode {
+  FILE_ALREADY_EXISTS,
+  FOLDER_ALREADY_EXISTS,
+}
