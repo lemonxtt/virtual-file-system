@@ -8,6 +8,7 @@ import { File } from '../files/file.entity';
 @Module({
   imports: [TypeOrmModule.forFeature([Folder, File])],
   providers: [FoldersService],
-  controllers: [FoldersController]
+  controllers: [FoldersController],
+  exports: [FoldersService]
 })
 export class FoldersModule {}
