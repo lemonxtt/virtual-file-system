@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { FilesModule } from './files/files.module';
 import { FoldersModule } from './folders/folders.module';
+import { CommandLineModule } from './command-lines/command-line.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { FoldersModule } from './folders/folders.module';
     }),
     FilesModule,
     FoldersModule,
+    CommandLineModule,
   ],
   controllers: [AppController],
   providers: [AppService],
