@@ -22,7 +22,7 @@ export class FilesService {
   }
 
   async createFile(file: CreateFileDto) {
-    const { name, folderId } = file
+    const { name, folderId, value } = file
     const [isExists, folder] = await Promise.all([
       this.filesRepository.findOne({
         ...(folderId ? {
@@ -43,7 +43,7 @@ export class FilesService {
 
     const newFile = this.filesRepository.create({
       ...file,
-      size: name.length
+      size: value.length
     })
     if (folderId) newFile.folder = folder
     return this.filesRepository.save(newFile).catch(error => {
