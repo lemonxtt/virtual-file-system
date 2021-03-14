@@ -18,3 +18,9 @@ export class Folder extends BaseEntity {
   @JoinColumn()
   folder: Folder
 }
+
+export class FolderSize extends Folder {
+  size: number
+
+  // folders: FolderSize
+}

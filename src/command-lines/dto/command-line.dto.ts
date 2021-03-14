@@ -5,7 +5,7 @@ export class CommandLineBodyDto {
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  @MinLength(3)
+  @MinLength(2)
   cmd: string
   
   @ApiProperty()

@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ErrorCode } from 'src/common/errors';
-import { Folder } from 'src/folders/folder.entity';
+import { Folder, FolderSize } from 'src/folders/folder.entity';
 import { File } from 'src/files/file.entity';
 import { Repository } from 'typeorm';
 import { CommandLineBodyDto } from './dto/command-line.dto';
 import { handleError } from 'src/common/functions/handle-error';
+import { ILsOptions } from './interface/command-line.interface';
 
 @Injectable()
 export class CommandLineService {
@@ -20,11 +21,35 @@ export class CommandLineService {
     const { currentPath, cmd } = body
     this.validateCMD(cmd)
 
-    if (/^cd\s+/.test(cmd)) { // cd
+    if (/^cd\s+/.test(cmd)) {
       return await this.cdCommand(body)
+    } else if (/^ls((\s+-l)?(\s+\d+)?)$|^ls((\s+\d+)?(\s+-l)?)$/.test(cmd)) {
+      return await this.lsCommand(body)
     } else {
       handleError('invalid command', ErrorCode.INVALID_CMD)
     }
+  }
+
+  async lsCommand({ currentPath, cmd }: CommandLineBodyDto) {
+    const options: ILsOptions = {
+      "-l": /^ls((\s+-l)(\s+\d+)?)$|^ls((\s+\d+)?(\s+-l))$/.test(cmd),
+      "level": /^ls((\s+-l)?(\s+\d+))$|^ls((\s+\d+)(\s+-l)?)$/.test(cmd)
+        ? Number(cmd.match(/\d+/)[0])
+        : 1
+    }
+    const currentFolders = await this.analyzePath(currentPath)
+    let currentWorkingFolder = currentFolders.length && currentFolders[currentFolders.length - 1]
+
+    currentWorkingFolder = await this.foldersRepository.findOne({
+      where: {
+        id: currentWorkingFolder?.id
+      },
+      relations: ["folders", "files"],
+      select: options['-l']
+        ? ['createdAt', 'updatedAt', 'name', 'id']
+        : ['id', 'name']
+    })
+    return this.calculateSizeDepth(currentWorkingFolder, options, 1)
   }
 
   async cdCommand({ currentPath, cmd }: CommandLineBodyDto) {
@@ -73,6 +98,8 @@ export class CommandLineService {
 
   validateCMD(cmd: string) {
     if (/^cd\s+[a-zA-Z0-9 .\/_-]+$/.test(cmd)) {
+
+    } else if (/^ls((\s+-l)?(\s+\d+)?)$|^ls((\s+\d+)?(\s+-l)?)$/.test(cmd)) {
 
     } else {
       handleError("invalid cmd", ErrorCode.INVALID_CMD)
@@ -169,5 +196,57 @@ export class CommandLineService {
 
   concatPath(folders: Folder[], _folders: Folder[]) {
     return this.generatePathFromArray(folders.concat(_folders))
+  }
+
+  async calculateSizeDepth(folder: Folder, options: ILsOptions, currentLevel: number): Promise<FolderSize | Folder> {
+    const isDetail = options['-l']
+    const totalFileSize = isDetail
+      ? folder.files.reduce((totalSize, file) => totalSize + file.size, 0)
+      : 0
+    if (!folder.folders?.length && isDetail) {
+      return {
+        ...folder,
+        size: totalFileSize
+      }
+    }
+    const childFolders = await this.foldersRepository.find({
+      where: {
+        folder: {
+          id: folder.id
+        }
+      },
+      relations: ['folders', 'files'],
+      select: isDetail
+        ? ['createdAt', 'updatedAt', 'name', 'id']
+        : ['id', 'name']
+    })
+    const childFolderSizes = await Promise.all(
+      childFolders.map(childFolder => {
+        if (isDetail || currentLevel + 1 < options.level) {
+          return this.calculateSizeDepth(childFolder, options, currentLevel + 1)
+        }
+        return childFolder
+      })
+    )
+    const totalFolderSize = isDetail
+      ? childFolderSizes.reduce((totalSize, childFolder) => totalSize + (childFolder as FolderSize).size, 0)
+      : 0
+    return {
+      ...folder,
+      folders: currentLevel < options.level
+        ? childFolderSizes
+        : childFolderSizes.map(childFolderSize => {
+          delete childFolderSize.folders
+          delete childFolderSize.files
+          return childFolderSize
+        }),
+      ...(
+        isDetail
+          ? {
+            size: totalFileSize + totalFolderSize
+          }
+          : {}
+      )
+    }
   }
 }
