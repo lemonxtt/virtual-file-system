@@ -40,15 +40,37 @@ export class CommandLineService {
     const currentFolders = await this.analyzePath(currentPath)
     let currentWorkingFolder = currentFolders.length && currentFolders[currentFolders.length - 1]
 
-    currentWorkingFolder = await this.foldersRepository.findOne({
-      where: {
-        id: currentWorkingFolder?.id
-      },
-      relations: ["folders", "files"],
-      select: options['-l']
-        ? ['createdAt', 'updatedAt', 'name', 'id']
-        : ['id', 'name']
-    })
+    currentWorkingFolder = currentWorkingFolder
+      ? await this.foldersRepository.findOne({
+        where: {
+          id: currentWorkingFolder?.id
+        },
+        relations: ["folders", "files"],
+        select: options['-l']
+          ? ['createdAt', 'updatedAt', 'name', 'id']
+          : ['id', 'name']
+      })
+      : {
+        id: null,
+        name: 'root',
+        folders: await this.foldersRepository.find({
+          where: {
+            folder: null
+          },
+          relations: ["folders", "files"],
+          select: options['-l']
+            ? ['createdAt', 'updatedAt', 'name', 'id']
+            : ['id', 'name']
+        }),
+        files: await this.filesRepository.find({
+          where: {
+            folder: null
+          },
+          select: options['-l']
+            ? ['id', 'createdAt', 'updatedAt', 'name', 'size']
+            : ['id', 'name', 'size']
+        })
+      } as Folder
     return this.calculateSizeDepth(currentWorkingFolder, options, 1)
   }
 
