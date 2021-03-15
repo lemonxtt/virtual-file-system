@@ -11,10 +11,10 @@ export class Folder extends BaseEntity {
   @OneToMany(() => File, file => file.folder)
   files?: File[]
 
-  @OneToMany(() => Folder, folder => folder.folder)
+  @OneToMany(() => Folder, folder => folder.folder, { cascade: true, onDelete: "CASCADE" })
   folders: Folder[]
 
-  @ManyToOne(() => Folder, { nullable: true })
+  @ManyToOne(() => Folder, { nullable: true, onDelete: "CASCADE" })
   @JoinColumn()
   folder: Folder
 }

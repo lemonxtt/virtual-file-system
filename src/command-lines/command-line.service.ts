@@ -37,14 +37,21 @@ export class CommandLineService {
     const currentFolders = await this.analyzePath(currentPath)
     const currentWorkingFolder = currentFolders.length ? currentFolders[currentFolders.length - 1] : null
 
-    const destinationPath = cmd.match(/^rm +([a-zA-Z0-9 *.\/_-]+)$/)[1]
-    const destinationFolders = await this.analyzePath(
-      destinationPath,
-      destinationPath.slice(0, 1) !== '/' && currentWorkingFolder
+    let destinationPath = cmd.match(/^rm +([a-zA-Z0-9 *.\/_-]+)$/)[1]
+    if (destinationPath.slice(0, 2) === './') {
+      destinationPath = destinationPath.substring(2) // remove first 2 characters
+    }
+    const splitDestinations = destinationPath.split('/')
+    const theLastOneInDestination = splitDestinations.pop()
+    const parentPath = splitDestinations.join('/')
+    const parentFolders = await this.analyzePath(
+      parentPath,
+      parentPath.slice(0, 1) !== '/' && currentWorkingFolder,
+      ["folders", "files"]
     )
-    let destinationFolder = destinationFolders.slice(-1)[0]
-    if (!destinationFolders) { // root
-      destinationFolder = {
+    let parentFolder = parentFolders.slice(-1)[0]
+    if (!parentFolder) { // root
+      parentFolder = {
         name: 'root',
         folders: await this.foldersRepository.find({
           where: {
@@ -57,13 +64,29 @@ export class CommandLineService {
         })
       } as Folder
     }
-    return this.removeFolder(destinationFolder)
+    if (theLastOneInDestination === '*') {
+      return await Promise.all([
+        Promise.all(parentFolder.files.map(file => this.filesRepository.remove(file))),
+        Promise.all(parentFolder.folders.map(folder => this.removeFolder(folder))),
+      ])
+    } else {
+      const findRemoveFolder = parentFolder.folders.find(folder => folder.name === theLastOneInDestination)
+      if (findRemoveFolder) {
+        return await this.removeFolder(
+          await this.foldersRepository.findOne(findRemoveFolder.id)
+        )
+      }
+      const findRemoveFile = parentFolder.files.find(file => file.name === theLastOneInDestination)
+      if (findRemoveFile) {
+        return await this.filesRepository.remove(findRemoveFile)
+      }
+    }
   }
 
   async removeFolder(folder: Folder) {
     const removePromises: Promise<any>[] = [
       this.foldersRepository.remove(folder),
-      Promise.all(folder.files.map(file => this.filesRepository.remove(file)))
+      Promise.all((folder.files || []).map(file => this.filesRepository.remove(file)))
     ]
     if (folder.folders) {
       const childFolders = await this.foldersRepository.find({
@@ -305,12 +328,16 @@ export class CommandLineService {
       folders.push(lastFolder)
       _currentFolder = lastFolder
     }
-    if (_path === '') return folders
-    const folderNames = _path.split('/')
+    if (_path === '') return folders.length
+      ? folders
+      : [
+        !selects.length || !currentFolder
+          ? currentFolder
+          : await this.foldersRepository.findOne(currentFolder.id, { relations: selects })
+      ]
+    const folderNames = _path.split('/').filter(e => e !== '')
     if (!folderNames.length) return folders
     if (folderNames.length) {
-      if (folderNames[0] === '') folderNames.splice(0, 1)
-
       for (let i = 0; i < folderNames.length; i++) {
         const folderName = folderNames[i]
         if (folderName === '') continue
@@ -382,8 +409,8 @@ export class CommandLineService {
       : 0
     if (!folder.folders?.length && isDetail) {
       return {
+        size: totalFileSize,
         ...folder,
-        size: totalFileSize
       }
     }
     const childFolders = await this.foldersRepository.find({
@@ -409,6 +436,13 @@ export class CommandLineService {
       ? childFolderSizes.reduce((totalSize, childFolder) => totalSize + (childFolder as FolderSize).size, 0)
       : 0
     return {
+      ...(
+        isDetail
+          ? {
+            size: totalFileSize + totalFolderSize
+          }
+          : {}
+      ),
       ...folder,
       folders: currentLevel < options.level
         ? childFolderSizes
@@ -417,13 +451,6 @@ export class CommandLineService {
           delete childFolderSize.files
           return childFolderSize
         }),
-      ...(
-        isDetail
-          ? {
-            size: totalFileSize + totalFolderSize
-          }
-          : {}
-      )
     }
   }
 }
