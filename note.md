@@ -15,8 +15,8 @@ flush privileges;
 CREATE DATABASE virtual_file_system
 use virtual_file_system
 
-root/a
 /root/a
+root/a
 ./root/a
 ../root/a
 ../../root/a
@@ -30,3 +30,23 @@ ls -l
 ls 9
 ls -l 9
 ls 9 -l
+
+
+## cr
+```
+{
+    "currentPath": "/",
+    "cmd": "cr -p hh/h2"
+}
+```
+
+## rm
+```
+```
+
+rm ./*
+rm ./aa/*
+rm ./dd/ee
+rm abc
+rm ab/bc
+rm /aa/bb/cc

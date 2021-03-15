@@ -26,9 +26,59 @@ export class CommandLineService {
       return await this.lsCommand(body)
     } else if (/^cr( +-p)? +("[a-zA-Z0-9 .\/_-]+"|[a-zA-Z0-9 .\/_-]+?)( +"?.+"?)?$/.test(cmd)) {
       return await this.crCommand(body)
+    } else if (/^rm +[a-zA-Z0-9 *.\/_-]+$/.test(cmd)) {
+      return await this.rmCommand(body)
     } else {
       handleError('invalid command', ErrorCode.INVALID_CMD)
     }
+  }
+
+  async rmCommand({ currentPath, cmd }: CommandLineBodyDto) {
+    const currentFolders = await this.analyzePath(currentPath)
+    const currentWorkingFolder = currentFolders.length ? currentFolders[currentFolders.length - 1] : null
+
+    const destinationPath = cmd.match(/^rm +([a-zA-Z0-9 *.\/_-]+)$/)[1]
+    const destinationFolders = await this.analyzePath(
+      destinationPath,
+      destinationPath.slice(0, 1) !== '/' && currentWorkingFolder
+    )
+    let destinationFolder = destinationFolders.slice(-1)[0]
+    if (!destinationFolders) { // root
+      destinationFolder = {
+        name: 'root',
+        folders: await this.foldersRepository.find({
+          where: {
+            folder: null
+          },
+          relations: ['folder', 'folders', 'files']
+        }),
+        files: await this.filesRepository.find({
+          folder: null
+        })
+      } as Folder
+    }
+    return this.removeFolder(destinationFolder)
+  }
+
+  async removeFolder(folder: Folder) {
+    const removePromises: Promise<any>[] = [
+      this.foldersRepository.remove(folder),
+      Promise.all(folder.files.map(file => this.filesRepository.remove(file)))
+    ]
+    if (folder.folders) {
+      const childFolders = await this.foldersRepository.find({
+        where: {
+          folder: {
+            id: folder.id
+          }
+        },
+        relations: ['folders', 'files']
+      })
+      removePromises.push(
+        ...childFolders.map(childFolder => this.removeFolder(childFolder))
+      )
+    }
+    return await Promise.all(removePromises)
   }
 
   async crCommand({ currentPath, cmd }: CommandLineBodyDto) {
@@ -151,7 +201,7 @@ export class CommandLineService {
         : 1
     }
     const currentFolders = await this.analyzePath(currentPath)
-    let currentWorkingFolder = currentFolders.length && currentFolders[currentFolders.length - 1]
+    let currentWorkingFolder = currentFolders.length ? currentFolders[currentFolders.length - 1] : null
 
     currentWorkingFolder = currentWorkingFolder
       ? await this.foldersRepository.findOne({
@@ -189,7 +239,7 @@ export class CommandLineService {
 
   async cdCommand({ currentPath, cmd }: CommandLineBodyDto) {
     const currentFolders = await this.analyzePath(currentPath)
-    const currentWorkingFolder = currentFolders.length && currentFolders[currentFolders.length - 1]
+    const currentWorkingFolder = currentFolders.length ? currentFolders[currentFolders.length - 1] : null
 
     if (!/^cd\s+[a-zA-Z0-9 .\/_-]+$/.test(cmd)) {
       handleError('invalid cd command', ErrorCode.INVALID_CMD)
@@ -231,7 +281,7 @@ export class CommandLineService {
     }
   }
 
-  async analyzePath(path: string, currentFolder?: Folder) {
+  async analyzePath(path: string, currentFolder?: Folder, selects: string[] = []) {
     if (!currentFolder && path.includes('..')) {
       handleError("can't back to previous root", ErrorCode.PATH_NOT_EXISTS)
     }
@@ -246,7 +296,7 @@ export class CommandLineService {
           where: {
             id: lastFolder.folder.id
           },
-          relations: ['folder']
+          relations: ['folder'].concat(selects)
         })
         lastFolder = findLastFolder
 
@@ -287,7 +337,7 @@ export class CommandLineService {
                 }
             )
           },
-          relations: ['folder']
+          relations: ['folder'].concat(selects)
         })
         if (!folder) {
           handleError(`the path ${folderName} doesn't exists`, ErrorCode.PATH_NOT_EXISTS)
