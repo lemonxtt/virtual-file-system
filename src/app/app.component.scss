@@ -1,0 +1,42 @@
+.command-histories {
+    overflow-y: scroll;
+    height: 300px;
+    width: 80%;
+    border: 1px solid darkgray;
+    background-color: #282b33;
+    color: #e5e5e5;
+    padding: 10px;
+    .path {
+        color: #2e5caf
+    }
+    .cmd-detail {
+        color: #00a66a
+    }
+    .text-result {
+      color: white
+    }
+    .listing-results {
+      .file {
+        color: white
+      }
+      .folder {
+        color: #2e5caf
+      }
+    }
+}
+
+.current-working-folder {
+  padding: 20px 0 10px;
+
+  .label {
+    color: black;
+  }
+  .value {
+    color: #2e5caf
+  }
+}
+
+.input-cmd {
+  width: 70%;
+}
+
