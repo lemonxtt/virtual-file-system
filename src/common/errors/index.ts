@@ -6,4 +6,5 @@ export enum ErrorCode {
   PATH_NOT_EXISTS,
   INVALID_CMD,
   NOT_BELONG_TO,
+  DESTINATION_NOT_IDENTIFY
 }

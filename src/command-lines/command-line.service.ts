@@ -19,14 +19,127 @@ export class CommandLineService {
 
   async execute(body: CommandLineBodyDto) {
     const { currentPath, cmd } = body
-    this.validateCMD(cmd)
 
     if (/^cd\s+/.test(cmd)) {
       return await this.cdCommand(body)
     } else if (/^ls((\s+-l)?(\s+\d+)?)$|^ls((\s+\d+)?(\s+-l)?)$/.test(cmd)) {
       return await this.lsCommand(body)
+    } else if (/^cr( +-p)? +("[a-zA-Z0-9 .\/_-]+"|[a-zA-Z0-9 .\/_-]+?)( +"?.+"?)?$/.test(cmd)) {
+      return await this.crCommand(body)
     } else {
       handleError('invalid command', ErrorCode.INVALID_CMD)
+    }
+  }
+
+  async crCommand({ currentPath, cmd }: CommandLineBodyDto) {
+    const options = {
+      '-p': /^cr( +-p) +("[a-zA-Z0-9 .\/_-]+"|[a-zA-Z0-9 .\/_-]+?)( +"?.+"?)?$/.test(cmd)
+    }
+    let destinationPath = cmd.match(/^cr( +-p)? +("[a-zA-Z0-9 .\/_-]+"|[a-zA-Z0-9 .\/_-]+?)( +"?.+"?)?$/)[2]
+    if (destinationPath.slice(0, 2) === './') {
+      destinationPath = destinationPath.substring(2) // remove first 2 characters
+    }
+    // const destinationName = destinationPath.match(/([a-zA-Z0-9 _-]+)\/?$/)[0]
+    const fileData = cmd.match(/^^cr( +-p)? +("[a-zA-Z0-9 .\/_-]+"|[a-zA-Z0-9 .\/_-]+?)( +"?.+"?)?$/)[3]
+
+    const currentFolders = await this.analyzePath(currentPath)
+    let currentWorkingFolder = currentFolders.length ? currentFolders[currentFolders.length - 1] : null
+
+    if (currentPath === '/' && destinationPath.includes('..')) {
+      handleError("can't back to previous root", ErrorCode.PATH_NOT_EXISTS)
+    }
+    const folders: Folder[] = []
+
+    let _destinationPath = destinationPath
+    let _currentWorkingFolder = currentWorkingFolder
+    if (_destinationPath.includes('..')) {
+      let lastFolder = currentWorkingFolder
+      while (_destinationPath.includes('..')) {
+        if (lastFolder.folder) {
+          const findLastFolder = await this.foldersRepository.findOne({
+            where: {
+              id: lastFolder?.folder.id
+            },
+            relations: ['folder']
+          })
+          lastFolder = findLastFolder
+        } else {
+          lastFolder = null
+        }
+
+        _destinationPath = _destinationPath.replace(/\.\./, '') // replace 1 time
+      }
+
+      folders.push(lastFolder)
+      _currentWorkingFolder = lastFolder
+    }
+    if (_destinationPath === '') {
+      handleError(`invalid cr's parameter`, ErrorCode.INVALID_CMD)
+    }
+    const names = _destinationPath.split('/')
+    if (!names.length) {
+      handleError("can't identify destination", ErrorCode.DESTINATION_NOT_IDENTIFY)
+    }
+    if (names[0] === '') names.splice(0, 1)
+
+    for (let i = 0; i < names.length - 1; i++) {
+      const folderName = names[i]
+      if (folderName === '') continue
+      const body = {
+        name: folderName,
+        ...(
+          i === 0
+            ? (
+              _currentWorkingFolder
+                ? {
+                  folder: {
+                    id: _currentWorkingFolder.id
+                  }
+                }
+                : { folder: null }
+            )
+            : {
+              folder: folders.slice(-1)[0]
+                ? {
+                  id: folders.slice(-1)[0].id
+                }
+                : null
+            }
+        )
+      }
+      let folder = await this.foldersRepository.findOne({
+        where: body,
+        relations: ['folder']
+      })
+      if (!folder) {
+        if (!options['-p']) {
+          handleError(`the path ${folderName} doesn't exists`, ErrorCode.PATH_NOT_EXISTS)
+        }
+        folder = await this.foldersRepository.save(body)
+      }
+      folders.push(folder)
+    }
+    const newFolderName = names.slice(-1)[0]
+    const body = {
+      name: newFolderName,
+      folder: names.length === 1 ? _currentWorkingFolder : folders.slice(-1)[0]
+    }
+    if (fileData) { // file
+      const findFileExist = await this.filesRepository.findOne(body)
+      if (findFileExist) {
+        handleError("this destination file already exists", ErrorCode.FILE_ALREADY_EXISTS)
+      }
+      return await this.filesRepository.save({
+        ...body,
+        value: fileData,
+        size: fileData.length
+      })
+    } else { // folder
+      const findFolderExist = await this.foldersRepository.findOne(body)
+      if (findFolderExist) {
+        handleError("this destination folder already exists", ErrorCode.FOLDER_ALREADY_EXISTS)
+      }
+      return await this.foldersRepository.save(body)
     }
   }
 
@@ -83,7 +196,7 @@ export class CommandLineService {
     }
     let destinationPath = cmd.match(/^cd\s+([a-zA-Z0-9 .\/_-]+)$/)[1]
     if (destinationPath.slice(0, 2) === './') {
-      destinationPath = destinationPath.substring(2)
+      destinationPath = destinationPath.substring(2) // remove first 2 characters`
     }
     const destinationFolders = await this.analyzePath(
       destinationPath,
@@ -91,21 +204,21 @@ export class CommandLineService {
     )
     const firstFolderInDestination = destinationFolders[0]
 
-    if (/^\/[a-zA-Z0-9 _-]+/.test(destinationPath)) { // eg: /a/b/c, don't care current folder, cd from root
+    if (/^\/[a-zA-Z0-9 _-]+/.test(destinationPath)) { // e.g. /a/b/c, don't care current folder, cd from root
       if (firstFolderInDestination.folder) {
         handleError("the destination doesn't exists", ErrorCode.PATH_NOT_EXISTS)
       }
       return {
         newWorkingFolder: this.generatePathFromArray(destinationFolders)
       }
-    } else if (/^(?:\.\/)?[a-zA-Z0-9 _-]+/.test(destinationPath)) { // eg: a/b/c, cd from current folder to anywhere
+    } else if (/^(?:\.\/)?[a-zA-Z0-9 _-]+/.test(destinationPath)) { // e.g. a/b/c, cd from current folder to anywhere
       if (firstFolderInDestination.folder?.id !== currentWorkingFolder.id) {
         handleError(`${firstFolderInDestination.name} doesn't belong to current folder`, ErrorCode.NOT_BELONG_TO)
       }
       return {
         newWorkingFolder: this.concatPath(currentFolders, destinationFolders)
       }
-    } else if (/^(\.\.\/|\.\.)+[a-zA-Z0-9 _-]*/.test(destinationPath)) { // eg: ../a/b, cd from previous current folder
+    } else if (/^(\.\.\/|\.\.)+[a-zA-Z0-9 _-]*/.test(destinationPath)) { // e.g. ../a/b, cd from previous current folder
       if (!currentWorkingFolder) {
         handleError("can't find ../ from current folder", ErrorCode.PATH_NOT_EXISTS)
       }
@@ -115,16 +228,6 @@ export class CommandLineService {
       }
     } else {
       handleError("invalid cd command", ErrorCode.INVALID_CMD)
-    }
-  }
-
-  validateCMD(cmd: string) {
-    if (/^cd\s+[a-zA-Z0-9 .\/_-]+$/.test(cmd)) {
-
-    } else if (/^ls((\s+-l)?(\s+\d+)?)$|^ls((\s+\d+)?(\s+-l)?)$/.test(cmd)) {
-
-    } else {
-      handleError("invalid cmd", ErrorCode.INVALID_CMD)
     }
   }
 
@@ -176,9 +279,11 @@ export class CommandLineService {
                     : { folder: null }
                 )
                 : {
-                  folder: {
-                    id: folders.slice(-1)[0].id
-                  }
+                  folder: folders.slice(-1)[0]
+                    ? {
+                      id: folders.slice(-1)[0].id
+                    }
+                    : null
                 }
             )
           },
