@@ -13,7 +13,7 @@ export class File extends BaseEntity {
   @Column('int')
   size: number
 
-  @ManyToOne(type => Folder, { nullable: true, onDelete: "CASCADE" })
+  @ManyToOne(type => Folder, { nullable: true })
   @JoinColumn()
   folder: Folder
 }

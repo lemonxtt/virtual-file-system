@@ -8,6 +8,16 @@ import { CommandLineBodyDto, CommandLineBodyMore } from './dto/command-line.dto'
 import { handleError } from 'src/common/functions/handle-error';
 import { ILsOptions } from './interface/command-line.interface';
 
+declare global {
+  interface String {
+    clean(): string
+  }
+}
+
+String.prototype.clean = function() {
+  return this.replace(/^\.\//, '') // remove ./
+             .replace(/(?<=.+)\/$/, '') // remove the last /
+}
 @Injectable()
 export class CommandLineService {
   constructor(
@@ -18,7 +28,8 @@ export class CommandLineService {
 
 
   async execute(body: CommandLineBodyDto) {
-    const { currentPath, cmd } = body
+    let { currentPath, cmd } = body
+    currentPath = currentPath.clean()
     let currentFolders: Folder[]
     try {
       currentFolders = await this.analyzePath(currentPath)
@@ -46,9 +57,7 @@ export class CommandLineService {
 
   async rmCommand({ currentPath, cmd, currentWorkingFolder, currentFolders }: CommandLineBodyMore) {
     let destinationPath = cmd.match(/^rm +([a-zA-Z0-9 *.\/_-]+)$/)[1]
-    if (destinationPath.slice(0, 2) === './') {
-      destinationPath = destinationPath.substring(2) // remove first 2 characters
-    }
+    destinationPath = destinationPath.clean()
     const splitDestinations = destinationPath.split('/')
     const theLastOneInDestination = splitDestinations.pop()
     const parentPath = splitDestinations.join('/')
@@ -95,10 +104,7 @@ export class CommandLineService {
   }
 
   async removeFolder(folder: Folder) {
-    const removePromises: Promise<any>[] = [
-      this.foldersRepository.remove(folder),
-      Promise.all((folder.files || []).map(file => this.filesRepository.remove(file)))
-    ]
+    const removePromises: Promise<any>[] = (folder.files || []).map(file => this.filesRepository.remove(file))
     if (folder.folders) {
       const childFolders = await this.foldersRepository.find({
         where: {
@@ -112,17 +118,15 @@ export class CommandLineService {
         ...childFolders.map(childFolder => this.removeFolder(childFolder))
       )
     }
-    return await Promise.all(removePromises)
+    await Promise.all(removePromises)
+    await this.foldersRepository.remove(folder)
   }
 
   async crCommand({ currentPath, cmd, currentWorkingFolder, currentFolders }: CommandLineBodyMore) {
     const options = {
       '-p': /^cr( +-p) +("[a-zA-Z0-9 .\/_-]+"|[a-zA-Z0-9 .\/_-]+?)( +"?.+"?)?$/.test(cmd)
     }
-    let destinationPath = cmd.match(/^cr( +-p)? +("[a-zA-Z0-9 .\/_-]+"|[a-zA-Z0-9 .\/_-]+?)( +"?.+"?)?$/)[2]
-    if (destinationPath.slice(0, 2) === './') {
-      destinationPath = destinationPath.substring(2) // remove first 2 characters
-    }
+    let destinationPath = cmd.match(/^cr( +-p)? +("[a-zA-Z0-9 .\/_-]+"|[a-zA-Z0-9 .\/_-]+?)( +"?.+"?)?$/)[2].clean()
     // const destinationName = destinationPath.match(/([a-zA-Z0-9 _-]+)\/?$/)[0]
     const fileData = cmd.match(/^^cr( +-p)? +("[a-zA-Z0-9 .\/_-]+"|[a-zA-Z0-9 .\/_-]+?)( +"?.+"?)?$/)[3]
 
@@ -270,10 +274,7 @@ export class CommandLineService {
     if (!/^cd\s+[a-zA-Z0-9 .\/_-]+$/.test(cmd)) {
       handleError('invalid cd command', ErrorCode.INVALID_CMD)
     }
-    let destinationPath = cmd.match(/^cd\s+([a-zA-Z0-9 .\/_-]+)$/)[1]
-    if (destinationPath.slice(0, 2) === './') {
-      destinationPath = destinationPath.substring(2) // remove first 2 characters`
-    }
+    let destinationPath = cmd.match(/^cd\s+([a-zA-Z0-9 .\/_-]+)$/)[1].clean()
     const destinationFolders = await this.analyzePath(
       destinationPath,
       destinationPath.slice(0, 1) !== '/' && currentWorkingFolder
@@ -284,7 +285,7 @@ export class CommandLineService {
       if (!firstFolderInDestination) { // cd to root
         return {
           newWorkingFolder: '/'
-        }  
+        }
       } else if (firstFolderInDestination.folder) {
         handleError("the destination doesn't exists", ErrorCode.PATH_NOT_EXISTS)
       }
