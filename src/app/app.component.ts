@@ -1,7 +1,8 @@
 import { Component } from '@angular/core';
 import { finalize } from 'rxjs/operators';
 import { ISendCmdCdResponse, ISendCmdError } from './interfaces/api.interface';
-import { ICmdHistory } from './interfaces/cmd.interface';
+import { ICmdHistory, IFileFolder } from './interfaces/cmd.interface';
+import { IFile } from './interfaces/file.interface';
 import { IFolder } from './interfaces/folder.interface';
 import { ApiService } from './services/api.service';
 
@@ -28,52 +29,62 @@ export class AppComponent {
         cmd: this.currentCmd
       }
       this.apiService.sendCmd(body)
-      .pipe(
-        finalize(() => {
-          this.currentCmd = ''
-          const logElement = document.getElementById("command-histories");
-          console.log('logElement', logElement);
-          if (logElement) {
-            setTimeout(() => {
-              logElement.scrollTop = logElement?.scrollHeight;
-            }, 0);
-          }
-        })
-      )
-      .subscribe(
-        response => {
-          let results;
-          if (/^ls((\s+-l)?(\s+\d+)?)$|^ls((\s+\d+)?(\s+-l)?)$/.test(this.currentCmd)) {
-            const { files, folders } = response as IFolder
-            this.cmdHistories.push({
-              ...body,
-              files,
-              folders
-            })
-          } else {
-            if (/^cd\s+/.test(this.currentCmd)) {
-              results =  `new working folder:  ${(response as ISendCmdCdResponse).newWorkingFolder}`
-              this.currentWorkingFolder = response.newWorkingFolder
-            } else if (/^cr( +-p)? +("[a-zA-Z0-9 .\/_-]+"|[a-zA-Z0-9 .\/_-]+?)( +"?.+"?)?$/.test(this.currentCmd)) {
-              const { name } = (response as IFolder)
-              results = `created ${name}`
-            } else if (/^rm +[a-zA-Z0-9 *.\/_-]+$/.test(this.currentCmd)) {
-              // const deletedItems = (response as IFolder[]).map(e => e.name)
-              results = `deleted successfully}`
+        .pipe(
+          finalize(() => {
+            this.currentCmd = ''
+            const logElement = document.getElementById("command-histories");
+            if (logElement) {
+              setTimeout(() => {
+                // scroll to bottom
+                logElement.scrollTop = logElement?.scrollHeight;
+              }, 0);
             }
+          })
+        )
+        .subscribe(
+          response => {
+            let results;
+            if (/^ls((\s+-l)?(\s+\d+)?)$|^ls((\s+\d+)?(\s+-l)?)$/.test(this.currentCmd)) {
+              const combineDepth = (folder: IFolder, isDetail: boolean): IFileFolder => {
+                return {
+                  ...folder,
+                  isDetail,
+                  fileFolders: [
+                    ...((folder.files || []).map(file => ({ ...file, isFile: true })) as IFileFolder[]),
+                    ...((folder.folders || []).map(_folder => combineDepth(_folder, isDetail)))
+                  ]
+                }
+              }
+              const isDetail = body.cmd.includes(' -l')
+              this.cmdHistories.push({
+                ...body,
+                fileFolders: combineDepth(response, isDetail).fileFolders,
+                isDetail
+              })
+              console.log('cmdHistories :>> ', this.cmdHistories);
+            } else {
+              if (/^cd\s+/.test(this.currentCmd)) {
+                results = `new working folder:  ${(response as ISendCmdCdResponse).newWorkingFolder}`
+                this.currentWorkingFolder = response.newWorkingFolder
+              } else if (/^cr( +-p)? +("[a-zA-Z0-9 .\/_-]+"|[a-zA-Z0-9 .\/_-]+?)( +"?.+"?)?$/.test(this.currentCmd)) {
+                const { name } = (response as IFolder)
+                results = `created ${name}`
+              } else if (/^rm +[a-zA-Z0-9 *.\/_-]+$/.test(this.currentCmd)) {
+                results = `deleted successfully}`
+              }
+              this.cmdHistories.push({
+                ...body,
+                results
+              })
+            }
+          }, (error: ISendCmdError) => {
+            console.log(error);
             this.cmdHistories.push({
               ...body,
-              results
+              errorMessage: error.message
             })
           }
-        }, (error: ISendCmdError) => {
-          console.log(error);
-          this.cmdHistories.push({
-            ...body,
-            errorMessage: error.message
-          })
-        }
-      )
+        )
     }
   }
 }

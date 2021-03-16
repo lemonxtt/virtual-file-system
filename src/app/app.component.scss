@@ -13,36 +13,73 @@
         color: #00a66a
     }
     .error-message {
-      color: red;
+        color: red;
     }
     .text-result {
-      color: white
+        color: white
     }
-    .listing-results {
-      .file {
+}
+
+.child {
+    padding-left: 30px
+}
+
+.listing-results {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+    .file,
+    .folder {
+        padding: 0 5px;
+    }
+    .file {
         color: white;
-        padding: 0 5px;
-      }
-      .folder {
+    }
+    .folder {
         color: #9EFAE6;
-        padding: 0 5px;
-      }
+    }
+    .column-name {
+        width: 100%;
+        padding-bottom: 10px;
+        span {
+            color: #9979fd
+        }
+    }
+    .column {
+        display: inline;
+    }
+    .row {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        width: 100%;
+        span {
+            display: flex;
+            flex-direction: column;
+            flex-basis: 100%;
+            flex: 1;
+        }
+    }
+    .created-at,
+    .updated-at,
+    .size {
+        padding: 0 10px;
+        color: #adadad;
     }
 }
 
 .current-working-folder {
-  width: 80%;
-  padding: 20px 0 10px;
-
-  .label {
-    color: black;
-  }
-  .value {
-    color: #2e5caf
-  }
+    width: 80%;
+    padding: 20px 0 10px;
+    .label {
+        color: black;
+    }
+    .value {
+        color: #2e5caf
+    }
 }
 
 .input-cmd {
-  width: 80%;
+    width: 80%;
 }
-

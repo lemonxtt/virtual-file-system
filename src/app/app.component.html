@@ -325,14 +325,9 @@
       <div class="text-result" *ngIf="cmdHistory.results">
         {{cmdHistory.results}}
       </div>
-      <div class="listing-results" *ngIf="cmdHistory.files || cmdHistory.folders">
-        <span class="folder" *ngFor="let folder of cmdHistory.folders">
-          {{ folder.name }}
-        </span>
-        <span class="file" *ngFor="let file of cmdHistory.files">
-          {{ file.name }}
-        </span>
-      </div>
+      <ng-container [ngTemplateOutlet]="ListingResults"
+        [ngTemplateOutletContext]="{ cmdHistory: cmdHistory, isChild: false }">
+      </ng-container>
     </div>
   </div>
   <div class="current-working-folder">
@@ -381,3 +376,33 @@
 
 
 <router-outlet></router-outlet>
+
+<ng-template #ListingResults let-cmdHistory="cmdHistory" let-isChild="isChild">
+  <div class="listing-results" [class.child]="isChild" *ngIf="cmdHistory.fileFolders">
+    <div class="column-name" *ngIf="cmdHistory.isDetail">
+      <div class="row">
+        <span class="file">Name</span>
+        <span class="created-at">Created at</span>
+        <span class="updated-at">Updated at</span>
+        <span class="size">Size</span>
+      </div>
+    </div>
+    <div [ngClass]="{
+      'row': cmdHistory.isDetail,
+      'column': !cmdHistory.isDetail
+    }" *ngFor="let f of cmdHistory.fileFolders">
+      <span [ngClass]="{
+        'folder': !f.isFile,
+        'file': f.isFile
+      }">{{ f.name }}</span>
+      <ng-container *ngIf="cmdHistory.isDetail">
+        <span class="created-at">{{f.createdAt | date :'short'}}</span>
+        <span class="updated-at">{{f.updatedAt | date :'short'}}</span>
+        <span class="size">{{f.size + 'B'}}</span>
+        <ng-container class="folder-child" *ngIf="f.fileFolders?.length" [ngTemplateOutlet]="ListingResults"
+          [ngTemplateOutletContext]="{ cmdHistory: f, isChild: true }">
+        </ng-container>
+      </ng-container>
+    </div>
+  </div>
+</ng-template>
