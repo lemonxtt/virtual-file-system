@@ -3,10 +3,11 @@ import { HttpClient } from '@angular/common/http';
 import { ISendCmdBody, ISendCmdError } from "../interfaces/api.interface";
 import { catchError } from 'rxjs/operators';
 import { throwError } from "rxjs";
+import { environment } from "src/environments/environment";
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
-  baseUrl = 'http://localhost:3001'
+  baseUrl = environment.baseUrl
 
   constructor(private httpClient: HttpClient) {
 
