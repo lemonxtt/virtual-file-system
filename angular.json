@@ -127,5 +127,8 @@
       }
     }
   },
-  "defaultProject": "virtual-file-system"
+  "defaultProject": "virtual-file-system",
+  "cli": {
+    "analytics": false
+  }
 }
