@@ -73,7 +73,7 @@ export class CommandLineService {
       const findRemoveFolder = parentFolder.folders.find(folder => folder.name === theLastOneInDestination)
       if (findRemoveFolder) {
         return await this.removeFolder(
-          await this.foldersRepository.findOne(findRemoveFolder.id)
+          await this.foldersRepository.findOne(findRemoveFolder.id, { relations: ['files', 'folders'] })
         )
       }
       const findRemoveFile = parentFolder.files.find(file => file.name === theLastOneInDestination)
