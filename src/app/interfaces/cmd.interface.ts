@@ -7,4 +7,5 @@ export interface ICmdHistory {
   results?: any
   files?: IFile[]
   folders?: IFolder[]
+  errorMessage?: string
 }

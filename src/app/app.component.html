@@ -315,20 +315,23 @@
 </div>
 
 <div class="content" role="main">
-  <div class="command-histories">
+  <div class="command-histories" id="command-histories">
     <div *ngFor="let cmdHistory of cmdHistories">
       <b class="path">{{cmdHistory.currentPath}} > </b>
       <span class="cmd-detail">{{cmdHistory.cmd}}</span>
+      <div class="error-message" *ngIf="cmdHistory.errorMessage">
+        {{cmdHistory.errorMessage}}
+      </div>
       <div class="text-result" *ngIf="cmdHistory.results">
         {{cmdHistory.results}}
       </div>
       <div class="listing-results" *ngIf="cmdHistory.files || cmdHistory.folders">
-        <div class="file" *ngFor="let file of cmdHistory.files">
-          {{ file.name }}
-        </div>
-        <div class="folder" *ngFor="let folder of cmdHistory.folders">
+        <span class="folder" *ngFor="let folder of cmdHistory.folders">
           {{ folder.name }}
-        </div>
+        </span>
+        <span class="file" *ngFor="let file of cmdHistory.files">
+          {{ file.name }}
+        </span>
       </div>
     </div>
   </div>

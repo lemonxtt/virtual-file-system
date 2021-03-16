@@ -1,6 +1,8 @@
 import { Injectable } from "@angular/core"
 import { HttpClient } from '@angular/common/http';
-import { ISendCmdBody } from "../interfaces/api.interface";
+import { ISendCmdBody, ISendCmdError } from "../interfaces/api.interface";
+import { catchError } from 'rxjs/operators';
+import { throwError } from "rxjs";
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -12,6 +14,8 @@ export class ApiService {
 
   sendCmd<T = any>(body: ISendCmdBody) {
     const url = this.baseUrl + '/command-lines'
-    return this.httpClient.post<T>(url, body)
+    return this.httpClient.post<T>(url, body).pipe(
+      catchError(error => throwError(error.error as ISendCmdError))
+    )
   }
 }

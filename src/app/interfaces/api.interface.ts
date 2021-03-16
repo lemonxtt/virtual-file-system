@@ -4,5 +4,10 @@ export interface ISendCmdBody {
 }
 
 export interface ISendCmdCdResponse {
-  
+  newWorkingFolder: string
+}
+
+export interface ISendCmdError {
+  message: string
+  statusCode: number
 }

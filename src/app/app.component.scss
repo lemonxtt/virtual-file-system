@@ -12,20 +12,26 @@
     .cmd-detail {
         color: #00a66a
     }
+    .error-message {
+      color: red;
+    }
     .text-result {
       color: white
     }
     .listing-results {
       .file {
-        color: white
+        color: white;
+        padding: 0 5px;
       }
       .folder {
-        color: #2e5caf
+        color: #9EFAE6;
+        padding: 0 5px;
       }
     }
 }
 
 .current-working-folder {
+  width: 80%;
   padding: 20px 0 10px;
 
   .label {
@@ -37,6 +43,6 @@
 }
 
 .input-cmd {
-  width: 70%;
+  width: 80%;
 }
 
