@@ -50,8 +50,91 @@ export class CommandLineService {
       return await this.crCommand(newBody)
     } else if (/^rm +[a-zA-Z0-9 *.\/_-]+$/.test(cmd)) {
       return await this.rmCommand(newBody)
+    } else if (/^mv +([a-zA-Z0-9 .\/_-]+) +([a-zA-Z0-9 .\/_-]+)$/.test(cmd)) {
+      return await this.mvCommand(newBody)
     } else {
       handleError('invalid command', ErrorCode.INVALID_CMD)
+    }
+  }
+
+  async mvCommand({ currentPath, cmd, currentWorkingFolder, currentFolders }: CommandLineBodyMore) {
+    let match = cmd.match(/^mv +([a-zA-Z0-9 .\/_-]+) +([a-zA-Z0-9 .\/_-]+)$/)
+    const sourcePath = match[1].clean()
+    const destinationPath = match[2].clean()
+
+     if (currentPath === '/' && (destinationPath + sourcePath).includes('..')) {
+      handleError("can't back to previous root", ErrorCode.PATH_NOT_EXISTS)
+    }  
+    const sourceFolders= await this.analyzePath(sourcePath, currentPath.slice(0, 1) !== '/' && currentWorkingFolder)
+    
+    if (currentPath === '/' && destinationPath.includes('..')) {
+      handleError("can't back to previous root", ErrorCode.PATH_NOT_EXISTS)
+    }
+    const folders: Folder[] = []
+
+    let _destinationPath = destinationPath
+    let _currentWorkingFolder = currentWorkingFolder
+    if (_destinationPath.includes('..')) {
+      let lastFolder = _currentWorkingFolder
+      while (_destinationPath.includes('..')) {
+        if (lastFolder.folder) {
+          const findLastFolder = await this.foldersRepository.findOne({
+            where: {
+              id: lastFolder?.folder.id
+            },
+            relations: ['folder']
+          })
+          lastFolder = findLastFolder
+        } else {
+          lastFolder = null
+        }
+
+        _destinationPath = _destinationPath.replace(/\.\./, '') // replace 1 time
+      }
+
+      folders.push(lastFolder)
+      _currentWorkingFolder = lastFolder
+    }
+    if (_destinationPath === '') {
+      handleError(`invalid cr's parameter`, ErrorCode.INVALID_CMD)
+    }
+    const names = _destinationPath.split('/').filter(e => e !== '')
+    if (!names.length) {
+      handleError("can't identify destination", ErrorCode.DESTINATION_NOT_IDENTIFY)
+    }
+
+    for (let i = 0; i < names.length - 1; i++) {
+      const folderName = names[i]
+      const body = {
+        name: folderName,
+        ...(
+          i === 0
+            ? (
+              _currentWorkingFolder
+                ? {
+                  folder: {
+                    id: _currentWorkingFolder.id
+                  }
+                }
+                : { folder: null }
+            )
+            : {
+              folder: folders.slice(-1)[0]
+                ? {
+                  id: folders.slice(-1)[0].id
+                }
+                : null
+            }
+        )
+      }
+      let folder = await this.foldersRepository.findOne({
+        where: body,
+        relations: ['folder']
+      })
+      if (!folder) {
+        handleError(`the path ${folderName} doesn't exists`, ErrorCode.PATH_NOT_EXISTS)
+      }
+      folders.push(folder)
     }
   }
 
@@ -161,15 +244,13 @@ export class CommandLineService {
     if (_destinationPath === '') {
       handleError(`invalid cr's parameter`, ErrorCode.INVALID_CMD)
     }
-    const names = _destinationPath.split('/')
+    const names = _destinationPath.split('/').filter(e => e !== '')
     if (!names.length) {
       handleError("can't identify destination", ErrorCode.DESTINATION_NOT_IDENTIFY)
     }
-    if (names[0] === '') names.splice(0, 1)
 
     for (let i = 0; i < names.length - 1; i++) {
       const folderName = names[i]
-      if (folderName === '') continue
       const body = {
         name: folderName,
         ...(
