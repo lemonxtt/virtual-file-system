@@ -396,7 +396,7 @@ export class CommandLineService {
 
   generatePathFromArray(folders: Folder[]) {
     let index = 0
-    while (index !== folders.length) {
+    while (folders.length && index !== folders.length) {
       if (folders[index] === null) {
         folders.splice(index - 1, 2)
         index
