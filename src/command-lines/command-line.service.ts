@@ -80,6 +80,9 @@ export class CommandLineService {
       if (findRemoveFile) {
         return await this.filesRepository.remove(findRemoveFile)
       }
+      if (!findRemoveFile && !findRemoveFolder) {
+        handleError(`specified file/folder doesn't exists`, ErrorCode.PATH_NOT_EXISTS)
+      }
     }
   }
 
