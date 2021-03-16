@@ -280,8 +280,12 @@ export class CommandLineService {
     )
     const firstFolderInDestination = destinationFolders[0]
 
-    if (/^\/[a-zA-Z0-9 _-]+/.test(destinationPath)) { // e.g. /a/b/c, don't care current folder, cd from root
-      if (firstFolderInDestination.folder) {
+    if (/^\/[a-zA-Z0-9 _-]*/.test(destinationPath)) { // e.g. /a/b/c, don't care current folder, cd from root
+      if (!firstFolderInDestination) { // cd to root
+        return {
+          newWorkingFolder: '/'
+        }  
+      } else if (firstFolderInDestination.folder) {
         handleError("the destination doesn't exists", ErrorCode.PATH_NOT_EXISTS)
       }
       return {
@@ -326,13 +330,17 @@ export class CommandLineService {
     if (_path.includes('..')) {
       let lastFolder = currentFolder
       while (_path.includes('..')) {
-        const findLastFolder = await this.foldersRepository.findOne({
-          where: {
-            id: lastFolder.folder.id
-          },
-          relations: ['folder'].concat(selects)
-        })
-        lastFolder = findLastFolder
+        if (lastFolder.folder) {
+          const findLastFolder = await this.foldersRepository.findOne({
+            where: {
+              id: lastFolder?.folder.id
+            },
+            relations: ['folder']
+          })
+          lastFolder = findLastFolder
+        } else {
+          lastFolder = null
+        }
 
         _path = _path.replace(/\.\./, '') // replace 1 time
       }
