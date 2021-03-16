@@ -1,5 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsNotEmpty, IsString, Matches, MinLength } from "class-validator";
+import { Folder } from "src/folders/folder.entity";
 
 export class CommandLineBodyDto {
   @ApiProperty()
@@ -14,4 +15,10 @@ export class CommandLineBodyDto {
   @MinLength(1)
   @Matches(/^(\/[a-zA-Z0-9 _-]*)+$/, { message: "invalid currentPath" })
   currentPath: string
+}
+
+export class CommandLineBodyMore extends CommandLineBodyDto {
+  currentWorkingFolder: Folder
+
+  currentFolders: Folder[]
 }

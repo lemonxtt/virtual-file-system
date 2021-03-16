@@ -4,7 +4,7 @@ import { ErrorCode } from 'src/common/errors';
 import { Folder, FolderSize } from 'src/folders/folder.entity';
 import { File } from 'src/files/file.entity';
 import { Repository } from 'typeorm';
-import { CommandLineBodyDto } from './dto/command-line.dto';
+import { CommandLineBodyDto, CommandLineBodyMore } from './dto/command-line.dto';
 import { handleError } from 'src/common/functions/handle-error';
 import { ILsOptions } from './interface/command-line.interface';
 
@@ -19,24 +19,32 @@ export class CommandLineService {
 
   async execute(body: CommandLineBodyDto) {
     const { currentPath, cmd } = body
-
+    let currentFolders: Folder[]
+    try {
+      currentFolders = await this.analyzePath(currentPath)
+    } catch (error) {
+      handleError("current path not exists", ErrorCode.CURRENT_PATH_NOT_EXISTS)
+    }
+    const currentWorkingFolder = currentFolders.slice(-1)[0] || null
+    const newBody = {
+      ...body,
+      currentFolders,
+      currentWorkingFolder
+    }
     if (/^cd\s+/.test(cmd)) {
-      return await this.cdCommand(body)
+      return await this.cdCommand(newBody)
     } else if (/^ls((\s+-l)?(\s+\d+)?)$|^ls((\s+\d+)?(\s+-l)?)$/.test(cmd)) {
-      return await this.lsCommand(body)
+      return await this.lsCommand(newBody)
     } else if (/^cr( +-p)? +("[a-zA-Z0-9 .\/_-]+"|[a-zA-Z0-9 .\/_-]+?)( +"?.+"?)?$/.test(cmd)) {
-      return await this.crCommand(body)
+      return await this.crCommand(newBody)
     } else if (/^rm +[a-zA-Z0-9 *.\/_-]+$/.test(cmd)) {
-      return await this.rmCommand(body)
+      return await this.rmCommand(newBody)
     } else {
       handleError('invalid command', ErrorCode.INVALID_CMD)
     }
   }
 
-  async rmCommand({ currentPath, cmd }: CommandLineBodyDto) {
-    const currentFolders = await this.analyzePath(currentPath)
-    const currentWorkingFolder = currentFolders.length ? currentFolders[currentFolders.length - 1] : null
-
+  async rmCommand({ currentPath, cmd, currentWorkingFolder, currentFolders }: CommandLineBodyMore) {
     let destinationPath = cmd.match(/^rm +([a-zA-Z0-9 *.\/_-]+)$/)[1]
     if (destinationPath.slice(0, 2) === './') {
       destinationPath = destinationPath.substring(2) // remove first 2 characters
@@ -107,7 +115,7 @@ export class CommandLineService {
     return await Promise.all(removePromises)
   }
 
-  async crCommand({ currentPath, cmd }: CommandLineBodyDto) {
+  async crCommand({ currentPath, cmd, currentWorkingFolder, currentFolders }: CommandLineBodyMore) {
     const options = {
       '-p': /^cr( +-p) +("[a-zA-Z0-9 .\/_-]+"|[a-zA-Z0-9 .\/_-]+?)( +"?.+"?)?$/.test(cmd)
     }
@@ -117,9 +125,6 @@ export class CommandLineService {
     }
     // const destinationName = destinationPath.match(/([a-zA-Z0-9 _-]+)\/?$/)[0]
     const fileData = cmd.match(/^^cr( +-p)? +("[a-zA-Z0-9 .\/_-]+"|[a-zA-Z0-9 .\/_-]+?)( +"?.+"?)?$/)[3]
-
-    const currentFolders = await this.analyzePath(currentPath)
-    let currentWorkingFolder = currentFolders.length ? currentFolders[currentFolders.length - 1] : null
 
     if (currentPath === '/' && destinationPath.includes('..')) {
       handleError("can't back to previous root", ErrorCode.PATH_NOT_EXISTS)
@@ -219,15 +224,13 @@ export class CommandLineService {
     }
   }
 
-  async lsCommand({ currentPath, cmd }: CommandLineBodyDto) {
+  async lsCommand({ currentPath, cmd, currentWorkingFolder, currentFolders }: CommandLineBodyMore) {
     const options: ILsOptions = {
       "-l": /^ls((\s+-l)(\s+\d+)?)$|^ls((\s+\d+)?(\s+-l))$/.test(cmd),
       "level": /^ls((\s+-l)?(\s+\d+))$|^ls((\s+\d+)(\s+-l)?)$/.test(cmd)
         ? Number(cmd.match(/\d+/)[0])
         : 1
     }
-    const currentFolders = await this.analyzePath(currentPath)
-    let currentWorkingFolder = currentFolders.length ? currentFolders[currentFolders.length - 1] : null
 
     currentWorkingFolder = currentWorkingFolder
       ? await this.foldersRepository.findOne({
@@ -263,10 +266,7 @@ export class CommandLineService {
     return this.calculateSizeDepth(currentWorkingFolder, options, 1)
   }
 
-  async cdCommand({ currentPath, cmd }: CommandLineBodyDto) {
-    const currentFolders = await this.analyzePath(currentPath)
-    const currentWorkingFolder = currentFolders.length ? currentFolders[currentFolders.length - 1] : null
-
+  async cdCommand({ currentPath, cmd, currentWorkingFolder, currentFolders }: CommandLineBodyMore) {
     if (!/^cd\s+[a-zA-Z0-9 .\/_-]+$/.test(cmd)) {
       handleError('invalid cd command', ErrorCode.INVALID_CMD)
     }
