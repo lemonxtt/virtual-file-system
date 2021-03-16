@@ -70,7 +70,7 @@ export class AppComponent {
                 const { name } = (response as IFolder)
                 results = `created ${name}`
               } else if (/^rm +[a-zA-Z0-9 *.\/_-]+$/.test(this.currentCmd)) {
-                results = `deleted successfully}`
+                results = `deleted successfully`
               }
               this.cmdHistories.push({
                 ...body,
