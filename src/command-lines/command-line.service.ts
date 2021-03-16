@@ -285,7 +285,15 @@ export class CommandLineService {
         newWorkingFolder: this.generatePathFromArray(destinationFolders)
       }
     } else if (/^(?:\.\/)?[a-zA-Z0-9 _-]+/.test(destinationPath)) { // e.g. a/b/c, cd from current folder to anywhere
-      if (firstFolderInDestination.folder?.id !== currentWorkingFolder.id) {
+      if (!currentWorkingFolder) { // root
+        if (firstFolderInDestination.folder) {
+          handleError("error here", ErrorCode.PATH_NOT_EXISTS)
+        } else {
+          return {
+            newWorkingFolder: this.concatPath(currentFolders, destinationFolders)
+          }
+        }
+      } else if (firstFolderInDestination.folder?.id !== currentWorkingFolder?.id) {
         handleError(`${firstFolderInDestination.name} doesn't belong to current folder`, ErrorCode.NOT_BELONG_TO)
       }
       return {
