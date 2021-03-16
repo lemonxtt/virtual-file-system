@@ -79,6 +79,9 @@ export class AppComponent {
             }
           }, (error: ISendCmdError) => {
             console.log(error);
+            if (error.statusCode === 8) { // CURRENT_PATH_NOT_EXISTS
+              this.currentCmd = '/'
+            }
             this.cmdHistories.push({
               ...body,
               errorMessage: error.message
