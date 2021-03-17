@@ -256,13 +256,17 @@ export class CommandLineService {
         ...(
           i === 0
             ? (
-              _currentWorkingFolder
-                ? {
-                  folder: {
-                    id: _currentWorkingFolder.id
-                  }
-                }
-                : { folder: null }
+              _destinationPath.slice(0, 1) === '/'
+                ? { folder: null }
+                : (
+                  _currentWorkingFolder
+                    ? {
+                      folder: {
+                        id: _currentWorkingFolder.id
+                      }
+                    }
+                    : { folder: null }
+                )
             )
             : {
               folder: folders.slice(-1)[0]
