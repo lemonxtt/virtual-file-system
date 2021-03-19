@@ -3,7 +3,7 @@ https://www.inmotionhosting.com/support/website/how-to-create-a-database-using-m
 
 sudo mysql -u root -p
 123456789
-CREATE USER 'lemonxtt'@'localhost' IDENTIFIED BY 'jXCVaUjj8AdFHvj7'
+CREATE USER 'lemonxtt'@'localhost' IDENTIFIED BY 'jXCVaUjj8AdFHvj7';
 GRANT ALL ON *.* TO 'lemonxtt'@'localhost';
 FLUSH PRIVILEGES;
 quit
@@ -12,7 +12,7 @@ sudo mysql -u lemonxtt -p
 ALTER USER 'lemonxtt'@'localhost' IDENTIFIED WITH mysql_native_password BY 'jXCVaUjj8AdFHvj7';
 flush privileges;
 
-CREATE DATABASE virtual_file_system
+CREATE DATABASE virtual_file_system;
 use virtual_file_system
 
 /root/a
@@ -33,12 +33,15 @@ ls 9 -l
 
 
 ## cr
-```
 {
     "currentPath": "/",
     "cmd": "cr -p hh/h2"
 }
-```
+
+{
+    "currentPath": "/a",
+    "cmd": "cr -p hh/h2"
+}
 
 ## rm
 ```
@@ -50,3 +53,10 @@ rm ./dd/ee
 rm abc
 rm ab/bc
 rm /aa/bb/cc
+
+## mv
+mv e1/e1-1 /
+mv e1/e1-1 /a
+mv e1/e1-1 .
+mv e1/e1-1 ./
+mv e1 a

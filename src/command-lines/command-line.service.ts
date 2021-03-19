@@ -6,7 +6,7 @@ import { File } from 'src/files/file.entity';
 import { Repository } from 'typeorm';
 import { CommandLineBodyDto, CommandLineBodyMore } from './dto/command-line.dto';
 import { handleError } from 'src/common/functions/handle-error';
-import { ILsOptions } from './interface/command-line.interface';
+import { IAnalyzePathOptions, IAnalyzePathResult, ILsOptions } from './interface/command-line.interface';
 
 declare global {
   interface String {
@@ -14,9 +14,9 @@ declare global {
   }
 }
 
-String.prototype.clean = function() {
+String.prototype.clean = function () {
   return this.replace(/^\.\//, '') // remove ./
-             .replace(/(?<=.+)\/$/, '') // remove the last /
+    .replace(/(?<=.+)\/$/, '') // remove the last /
 }
 @Injectable()
 export class CommandLineService {
@@ -30,16 +30,16 @@ export class CommandLineService {
   async execute(body: CommandLineBodyDto) {
     let { currentPath, cmd } = body
     currentPath = currentPath.clean()
-    let currentFolders: Folder[]
+    let analyzePath: IAnalyzePathResult
     try {
-      currentFolders = await this.analyzePath(currentPath)
+      analyzePath = await this.analyzePath({ path: currentPath })
     } catch (error) {
       handleError("current path not exists", ErrorCode.CURRENT_PATH_NOT_EXISTS)
     }
-    const currentWorkingFolder = currentFolders.slice(-1)[0] || null
+    const currentWorkingFolder = analyzePath.folders.slice(-1)[0] || null
     const newBody = {
       ...body,
-      currentFolders,
+      currentFolders: analyzePath.folders,
       currentWorkingFolder
     }
     if (/^cd\s+/.test(cmd)) {
@@ -62,79 +62,23 @@ export class CommandLineService {
     const sourcePath = match[1].clean()
     const destinationPath = match[2].clean()
 
-     if (currentPath === '/' && (destinationPath + sourcePath).includes('..')) {
-      handleError("can't back to previous root", ErrorCode.PATH_NOT_EXISTS)
-    }  
-    const sourceFolders= await this.analyzePath(sourcePath, currentPath.slice(0, 1) !== '/' && currentWorkingFolder)
-    
-    if (currentPath === '/' && destinationPath.includes('..')) {
+    if (currentPath === '/' && (destinationPath + sourcePath).includes('..')) {
       handleError("can't back to previous root", ErrorCode.PATH_NOT_EXISTS)
     }
-    const folders: Folder[] = []
 
-    let _destinationPath = destinationPath
-    let _currentWorkingFolder = currentWorkingFolder
-    if (_destinationPath.includes('..')) {
-      let lastFolder = _currentWorkingFolder
-      while (_destinationPath.includes('..')) {
-        if (lastFolder.folder) {
-          const findLastFolder = await this.foldersRepository.findOne({
-            where: {
-              id: lastFolder?.folder.id
-            },
-            relations: ['folder']
-          })
-          lastFolder = findLastFolder
-        } else {
-          lastFolder = null
-        }
+    const analyzeSourcePath = await this.analyzePath({
+      path: sourcePath,
+      currentFolder: sourcePath.slice(0, 1) === '/' ? null : currentWorkingFolder
+    })
 
-        _destinationPath = _destinationPath.replace(/\.\./, '') // replace 1 time
-      }
+    const analyzeDestinationPath = await this.analyzePath({
+      path: destinationPath,
+      currentFolder: sourcePath.slice(0, 1) === '/' ? null : currentWorkingFolder
+    })
 
-      folders.push(lastFolder)
-      _currentWorkingFolder = lastFolder
-    }
-    if (_destinationPath === '') {
-      handleError(`invalid cr's parameter`, ErrorCode.INVALID_CMD)
-    }
-    const names = _destinationPath.split('/').filter(e => e !== '')
-    if (!names.length) {
-      handleError("can't identify destination", ErrorCode.DESTINATION_NOT_IDENTIFY)
-    }
-
-    for (let i = 0; i < names.length - 1; i++) {
-      const folderName = names[i]
-      const body = {
-        name: folderName,
-        ...(
-          i === 0
-            ? (
-              _currentWorkingFolder
-                ? {
-                  folder: {
-                    id: _currentWorkingFolder.id
-                  }
-                }
-                : { folder: null }
-            )
-            : {
-              folder: folders.slice(-1)[0]
-                ? {
-                  id: folders.slice(-1)[0].id
-                }
-                : null
-            }
-        )
-      }
-      let folder = await this.foldersRepository.findOne({
-        where: body,
-        relations: ['folder']
-      })
-      if (!folder) {
-        handleError(`the path ${folderName} doesn't exists`, ErrorCode.PATH_NOT_EXISTS)
-      }
-      folders.push(folder)
+    return {
+      analyzeSourcePath,
+      analyzeDestinationPath
     }
   }
 
@@ -144,12 +88,12 @@ export class CommandLineService {
     const splitDestinations = destinationPath.split('/')
     const theLastOneInDestination = splitDestinations.pop()
     const parentPath = splitDestinations.join('/')
-    const parentFolders = await this.analyzePath(
-      parentPath,
-      parentPath.slice(0, 1) !== '/' && currentWorkingFolder,
-      ["folders", "files"]
-    )
-    let parentFolder = parentFolders.slice(-1)[0]
+    const analyzeParentPath = await this.analyzePath({
+      path: parentPath,
+      currentFolder: parentPath.slice(0, 1) === '/' ? null : currentWorkingFolder,
+      selects: ["folders", "files"]
+    })
+    let parentFolder = analyzeParentPath.folders.slice(-1)[0]
     if (!parentFolder) { // root
       parentFolder = {
         name: 'root',
@@ -360,11 +304,11 @@ export class CommandLineService {
       handleError('invalid cd command', ErrorCode.INVALID_CMD)
     }
     let destinationPath = cmd.match(/^cd\s+([a-zA-Z0-9 .\/_-]+)$/)[1].clean()
-    const destinationFolders = await this.analyzePath(
-      destinationPath,
-      destinationPath.slice(0, 1) !== '/' && currentWorkingFolder
-    )
-    const firstFolderInDestination = destinationFolders[0]
+    const analyzeDestinationPath = await this.analyzePath({
+      path: destinationPath,
+      currentFolder: destinationPath.slice(0, 1) === '/' ? null : currentWorkingFolder
+    })
+    const firstFolderInDestination = analyzeDestinationPath.folders[0]
 
     if (/^\/[a-zA-Z0-9 _-]*/.test(destinationPath)) { // e.g. /a/b/c, don't care current folder, cd from root
       if (!firstFolderInDestination) { // cd to root
@@ -375,7 +319,7 @@ export class CommandLineService {
         handleError("the destination doesn't exists", ErrorCode.PATH_NOT_EXISTS)
       }
       return {
-        newWorkingFolder: this.generatePathFromArray(destinationFolders)
+        newWorkingFolder: this.generatePathFromArray(analyzeDestinationPath.folders)
       }
     } else if (/^(?:\.\/)?[a-zA-Z0-9 _-]+/.test(destinationPath)) { // e.g. a/b/c, cd from current folder to anywhere
       if (!currentWorkingFolder) { // root
@@ -383,14 +327,14 @@ export class CommandLineService {
           handleError("error here", ErrorCode.PATH_NOT_EXISTS)
         } else {
           return {
-            newWorkingFolder: this.concatPath(currentFolders, destinationFolders)
+            newWorkingFolder: this.concatPath(currentFolders, analyzeDestinationPath.folders)
           }
         }
       } else if (firstFolderInDestination.folder?.id !== currentWorkingFolder?.id) {
         handleError(`${firstFolderInDestination.name} doesn't belong to current folder`, ErrorCode.NOT_BELONG_TO)
       }
       return {
-        newWorkingFolder: this.concatPath(currentFolders, destinationFolders)
+        newWorkingFolder: this.concatPath(currentFolders, analyzeDestinationPath.folders)
       }
     } else if (/^(\.\.\/|\.\.)+[a-zA-Z0-9 _-]*/.test(destinationPath)) { // e.g. ../a/b, cd from previous current folder
       if (!currentWorkingFolder) {
@@ -398,18 +342,27 @@ export class CommandLineService {
       }
       const amountDoubleDot = destinationPath.match(/\.\./g)?.length + 1
       return {
-        newWorkingFolder: this.concatPath(currentFolders.slice(0, currentFolders.length - amountDoubleDot), destinationFolders)
+        newWorkingFolder: this.concatPath(currentFolders.slice(0, currentFolders.length - amountDoubleDot), analyzeDestinationPath.folders)
       }
     } else {
       handleError("invalid cd command", ErrorCode.INVALID_CMD)
     }
   }
 
-  async analyzePath(path: string, currentFolder?: Folder, selects: string[] = []) {
+  async analyzePath({
+    path,
+    currentFolder = null,
+    selects = [],
+  }: IAnalyzePathOptions): Promise<(IAnalyzePathResult)> {
     if (!currentFolder && path.includes('..')) {
       handleError("can't back to previous root", ErrorCode.PATH_NOT_EXISTS)
     }
-    const folders: Folder[] = []
+    let folders: Folder[] = []
+    const result: IAnalyzePathResult = {
+      folders,
+      file: null,
+      parentFolder: null // root
+    }
 
     let _path = path
     let _currentFolder = currentFolder
@@ -433,51 +386,70 @@ export class CommandLineService {
       folders.push(lastFolder)
       _currentFolder = lastFolder
     }
-    if (_path === '') return folders.length
-      ? folders
-      : [
-        !selects.length || !currentFolder
-          ? currentFolder
-          : await this.foldersRepository.findOne(currentFolder.id, { relations: selects })
-      ]
-    const folderNames = _path.split('/').filter(e => e !== '')
-    if (!folderNames.length) return folders
-    if (folderNames.length) {
-      for (let i = 0; i < folderNames.length; i++) {
-        const folderName = folderNames[i]
-        if (folderName === '') continue
-        const folder = await this.foldersRepository.findOne({
-          where: {
-            name: folderName,
-            ...(
-              i === 0
-                ? (
-                  _currentFolder
-                    ? {
-                      folder: {
-                        id: _currentFolder.id
-                      }
-                    }
-                    : { folder: null }
-                )
-                : {
-                  folder: folders.slice(-1)[0]
-                    ? {
-                      id: folders.slice(-1)[0].id
-                    }
-                    : null
-                }
-            )
-          },
-          relations: ['folder'].concat(selects)
-        })
-        if (!folder) {
-          handleError(`the path ${folderName} doesn't exists`, ErrorCode.PATH_NOT_EXISTS)
+    const names = _path.split('/').filter(e => e !== '')
+    if (_path === '' || !names.length) {
+      if (!folders?.length) {
+        folders.push(
+          !selects.length || !currentFolder
+            ? currentFolder
+            : await this.foldersRepository.findOne(currentFolder.id, { relations: selects })
+        )
+      }
+      return result
+    }
+    for (let i = 0; i < names.length; i++) {
+      const name = names[i]
+      const folderParentCondition = i === 0
+        ? (
+          _currentFolder
+            ? {
+              folder: {
+                id: _currentFolder.id
+              }
+            }
+            : { folder: null }
+        )
+        : {
+          folder: folders.slice(-1)[0]
+            ? {
+              id: folders.slice(-1)[0].id
+            }
+            : null
         }
+      const folder = await this.foldersRepository.findOne({
+        where: {
+          name,
+          ...folderParentCondition
+        },
+        relations: ['folder'].concat(selects)
+      })
+      if (!folder) {
+        if (i === names.length - 1) { // last item
+          const file = await this.filesRepository.findOne({
+            where: {
+              name,
+              ...folderParentCondition
+            },
+            relations: ['folder'].concat(selects)
+          })
+          if (file) {
+            result.file = file
+          }
+        }
+        handleError(`the path ${name} doesn't exists`, ErrorCode.PATH_NOT_EXISTS)
+      } else {
         folders.push(folder)
       }
     }
-    return folders
+    if (result.file) {
+      result.parentFolder = folders.slice(-1)[0]
+    } else {
+      if (folders.length) {
+        result.parentFolder = folders.slice(-1)[0].folder
+      }
+    }
+
+    return result
   }
 
   generatePathFromArray(folders: Folder[]) {
